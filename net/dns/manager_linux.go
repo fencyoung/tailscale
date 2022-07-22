@@ -78,18 +78,6 @@ func dnsMode(logf logger.Logf, env newOSConfigEnv) (ret string, err error) {
 		logf("dns: %v", debug)
 	}()
 
-	// Before we read /etc/resolv.conf (which might be in a broken
-	// or symlink-dangling state), try to ping the D-Bus service
-	// for systemd-resolved. If it's active on the machine, this
-	// will make it start up and write the /etc/resolv.conf file
-	// before it replies to the ping. (see how systemd's
-	// src/resolve/resolved.c calls manager_write_resolv_conf
-	// before the sd_event_loop starts)
-	resolvedUp := env.dbusPing("org.freedesktop.resolve1", "/org/freedesktop/resolve1") == nil
-	if resolvedUp {
-		dbg("resolved-ping", "yes")
-	}
-
 	bs, err := env.fs.ReadFile(resolvConf)
 	if os.IsNotExist(err) {
 		dbg("rc", "missing")
@@ -110,10 +98,6 @@ func dnsMode(logf logger.Logf, env newOSConfigEnv) (ret string, err error) {
 		if err := resolvedIsActuallyResolver(bs); err != nil {
 			logf("dns: resolvedIsActuallyResolver error: %v", err)
 			dbg("resolved", "not-in-use")
-			return "direct", nil
-		}
-		if !resolvedUp {
-			dbg("resolved", "no")
 			return "direct", nil
 		}
 		if err := env.dbusPing("org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager/DnsManager"); err != nil {
@@ -216,11 +200,6 @@ func dnsMode(logf logger.Logf, env newOSConfigEnv) (ret string, err error) {
 			return "direct", nil
 		}
 		dbg("nm-resolved", "yes")
-
-		if !resolvedUp {
-			dbg("resolved", "no")
-			return "direct", nil
-		}
 
 		// See large comment above for reasons we'd use NM rather than
 		// resolved. systemd-resolved is actually in charge of DNS
